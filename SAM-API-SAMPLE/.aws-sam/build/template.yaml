@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'SAM-API-SAMPLE
+
+  Sample SAM Template for SAM-API-SAMPLE
+
+  '
+Globals:
+  Function:
+    Timeout: 20
+Resources:
+  BasicAWSApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: Basic AWS Api Gateway
+      StageName: Staging
+  SendNotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: SendNotificationFunction
+      Handler: helloworld.App::handleRequest
+      Runtime: java11
+      MemorySize: 512
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: IndoxRecordTable
+      Events:
+        SendNotificationApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: BasicAWSApiGateway
+            Path: /sendNotification
+            Method: POST
+  IndoxRecordTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: IndoxRecordTable
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      - AttributeName: timestamp
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      - AttributeName: timestamp
+        KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      BillingMode: PAY_PER_REQUEST
+Outputs:
+  BasicAWSApiGateway:
+    Description: API Gateway endpoint URL for Staging stage for Hello World function
+    Value:
+      Fn::Sub: https://${BasicAWSApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Staging/hello/
+  BasicAWSApiGatewayRestApiId:
+    Description: API Gateway ARN for Basic AWS API Gateway
+    Value:
+      Ref: BasicAWSApiGateway
+    Export:
+      Name: BasicAWSApiGateway-RestApiId
+  BasicAWSApiGatewayRootResourceId:
+    Value:
+      Fn::GetAtt:
+      - BasicAWSApiGateway
+      - RootResourceId
+    Export:
+      Name: BasicAWSApiGateway-RootResourceId
+  SendNotificationApi:
+    Description: API Gateway endpoint URL for Prod stage for Hello World function
+    Value:
+      Fn::Sub: https://${BasicAWSApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/sendNotification/
+  SendNotificationFunction:
+    Description: Hello World Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - SendNotificationFunction
+      - Arn
+  SendNotificationFunctionIamRole:
+    Description: Implicit IAM Role created for Hello World function
+    Value:
+      Fn::GetAtt:
+      - SendNotificationFunctionRole
+      - Arn

@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  SAM-API-SAMPLE
+
+  Sample SAM Template for SAM-API-SAMPLE
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Runtime: java11
+    Timeout: 20
+    Handler: helloworld.App::handleRequest
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref IndoxRecordTable
+
+Parameters:
+  Environment:
+    Description: "Environment of this Stack"
+    Type: String
+    Default: Dev
+    AllowedValues:
+      - Dev
+      - Test
+      - Uat
+      - Prod
+
+Mappings:
+  InboxDataMapping:
+    Dev:
+      New
+
+Resources:
+  BasicAWSApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: Basic AWS Api Gateway
+      StageName: Staging
+
+  SendNotificationFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: HelloWorldFunction
+      MemorySize: 512
+      Policies:
+        # AmazonDynamoDBReadOnlyAccess
+        #        - AmazonDynamoDBFullAccess
+        - AWSLambdaDynamoDBExecutionRole
+        - DynamoDBCrudPolicy:
+            TableName: !Ref IndoxRecordTable
+#      Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+#        Variables:
+#          PARAM1: VALUE
+      Events:
+        Stream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt IndoxRecordTable.StreamArn
+            BatchSize: 100
+            StartingPosition: TRIM_HORIZON
+        SendNotificationApi:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            RestApiId: !Ref BasicAWSApiGateway
+            Path: /sendNotification
+            Method: POST
+
+  StreamFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Event:
+        Stream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt IndoxRecordTable.StreamArn
+            BatchSize: 100
+            StartingPosition: TRIM_HORIZON
+
+
+  IndoxRecordTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: IndoxRecordTable
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      BillingMode: PAY_PER_REQUEST
+      #SSESpecification:
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  BasicAWSApiGateway:
+    Description: 'API Gateway endpoint URL for Staging stage for Hello World function'
+    Value: !Sub 'https://${BasicAWSApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Staging/hello/'
+  BasicAWSApiGatewayRestApiId:
+    Description: 'API Gateway ARN for Basic AWS API Gateway'
+    Value: !Ref BasicAWSApiGateway
+    Export:
+      Name: BasicAWSApiGateway-RestApiId
+  BasicAWSApiGatewayRootResourceId:
+    Value: !GetAtt BasicAWSApiGateway.RootResourceId
+    Export:
+      Name: BasicAWSApiGateway-RootResourceId
+  SendNotificationApi:
+    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
+    Value: !Sub "https://${BasicAWSApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/sendNotification/"
+  SendNotificationFunction:
+    Description: "Hello World Lambda Function ARN"
+    Value: !GetAtt SendNotificationFunction.Arn
+  SendNotificationFunctionIamRole:
+    Description: "Implicit IAM Role created for Hello World function"
+    Value: !GetAtt SendNotificationFunctionRole.Arn
+
+  StreamFunctionArn:
+    Description: "Stream Function"
+    Value: !GetAtt StreamFunction.Arn
+    Export:
+      Name: MyStack-StreamFunctionArn
